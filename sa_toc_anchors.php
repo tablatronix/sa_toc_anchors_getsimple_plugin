@@ -219,7 +219,7 @@ function add_header_ids($contents){
     
 	}
 	
-  // removed the doctype and parent tags savehtml wants to give us
+  // removed the doctype,head, meta and parent tags savehtml wants to give us
 	$html_fragment = preg_replace('/^<!DOCTYPE.+?>|<head.*?>(.*)?<\/head>/', '', str_replace( array('<html>', '</html>', '<body>', '</body>'), array('', '', '', ''), $dom_document->saveHTML()));	 
 	return $html_fragment;
 }
