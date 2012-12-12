@@ -1,18 +1,11 @@
 <?php
 
 /* 
-release notes
-0.3
-Fix to remove extraneous head and meta charset tags.
-*/
-
-/*
-Plugin Name: SA TOC Anchors
-Description: Adds anchors to headers
-Version: 0.3
-Author: Shawn Alverson
-Author URI: http://www.shawnalverson.com/
-
+ * @Plugin Name: SA TOC Anchors
+ * @Description: Adds anchors to headers
+ * @Version: 1.0
+ * @Author: Shawn Alverson
+ * @AuthorURI: http://www.shawnalverson.com/
 */
 
 
@@ -25,7 +18,7 @@ $thisfile=basename(__FILE__, ".php");
 register_plugin(
 	$thisfile,                  //Plugin id
 	'SA TOC / Anchors',         //Plugin name
-	'0.3', 		                  //Plugin version
+	'1.0', 		                  //Plugin version
 	'Shawn Alverson',           //Plugin author
 	$sa_url,                    //author website
 	'Adds Table of Contents and anchors headings', //Plugin description
@@ -36,10 +29,10 @@ register_plugin(
 # activate filter 
 add_filter('content','add_toc'); 
 
-
 # Init
 
-$SA_TOC_DEBUG = false;
+$SA_TOC_ACTIVE = null; // global flag for add_header_ids
+$SA_TOC_DEBUG = null;  // plugin debug flag
 
 $allowargs = array(
   'depth' => create_function('$input', 'return filter_var(intval($input), FILTER_VALIDATE_INT, array(1,6));' ),
@@ -59,17 +52,19 @@ $sa_charsetstr = '<meta http-equiv="content-type" content="text/html; charset=ut
 # Functions
 
 function add_toc($contents) {
-  GLOBAL $SA_TOC_DEBUG;
+  GLOBAL $SA_TOC_DEBUG,$SA_TOC_ACTIVE;
   
   $trigger = "sa_toc";
   
   $expansion = getExpansion($trigger,$contents,true);
   
-  if($expansion){
+  if($expansion or ( isset($SA_TOC_ACTIVE) and $SA_TOC_ACTIVE == true ) ) {
     $contents = add_header_ids($contents);   
     while(getExpansion($trigger,$contents,true) == true){
       $contents = preg_replace("/\(%\s*(".$trigger.")(\s+(?:%[^%\)]|[^%])+)?\s*%\)/", process_trigger($trigger,$contents),$contents,1);       
     }  
+
+    $SA_TOC_ACTIVE = null; // keep global space clean, remove if no longer needed
   }
     
   return $contents;   
@@ -150,22 +145,31 @@ EOD;
 }   
 
 
-// deprecated
-function get_toc($slug = ""){ // returns table of contents as a list
-	# slug defaults to current slug if not passed as arg
-  $slug = (isset($slug) and $slug!="") ? $slug : return_page_slug();
-	$page_content = get_content($slug);
+function get_toc($argAry = null){ // returns table of contents as a list
+  
+  GLOBAL $satoc_incontent,$SA_TOC_ACTIVE;  
+
+  // prevent filter loops
+  if(isset($satoc_incontent)) return;
+  $satoc_incontent = $SA_TOC_ACTIVE = true;
 	
-	if($page_content) {
+  # slug defaults to current slug if not passed as arg
+  if(is_array($argAry) and isset($argAry['slug'])) $slug = $argAry['slug'];
+  else if (is_string($argAry) and isset($argAry) and $argAry!="") $slug = $argAry;
+  else $slug = return_page_slug();
+
+  // get page content
+  $page_content = returnPageContent($slug);
+  $satoc_incontent = null;
+
+	if(isset($page_content)) {
 		# Really shouldnt do add_headers twice everytime, probably need to save this as a xml file	
-		$contents = add_header_ids($page_content['content']);		
-		$toc = generate_toc($contents);
+		$contents = add_header_ids($page_content);		
+    if(is_array($argAry) and count($argAry) > 0) { $toc = generate_toc_w_args($contents,$argAry); }
+    else { $toc = generate_toc($contents); }
 		return $toc;
 	}
-	else{
-		// echo "No content for slug " . $slug;
-		return false;
-	}
+
 }
 
 // deprecated
@@ -240,14 +244,12 @@ function htmltrim($string)
 }
 
 function process_trigger($trigger,$contents){
-  GLOBAL $SA_TOC_DEBUG;
   
   $expansion = getExpansion($trigger,$contents);
   $args = array();
   
   if(!empty($expansion['args'])){
     $args = filterArgs($expansion['args']);  
-    if(isset($args['debug'])) $SA_TOC_DEBUG = true;  
   }
   
   return generate_toc_w_args($contents,$args);
@@ -255,6 +257,10 @@ function process_trigger($trigger,$contents){
 
 function generate_toc_w_args($contents,$args = Array()){
   // For calling with argument array instead of individual arguments.
+
+  GLOBAL $SA_TOC_DEBUG;
+  if(isset($args['debug'])) $SA_TOC_DEBUG = true;  
+
   // debugArray($args);
 
   $type = 'asc';
@@ -268,6 +274,9 @@ function generate_toc_w_args($contents,$args = Array()){
   if(isset($args['asc']))  $type = 'asc';
   if(!empty($args['depth']))  $depth = $args['depth'];
   if(!empty($args['class']))  $class = $args['class'];
+
+  if(isset($args['list']))  $list = $args['list'];
+  if(isset($args['type']))  $type = $args['type'];
   
   return generate_toc($contents,$type,$depth,$class,$list); 
 }
@@ -405,36 +414,6 @@ function get_toc_abs($headers,$list){
   $tocstr.= str_repeat("</li></$list>\n", $thislvl);	
 	return $tocstr;
 }	
-
-function get_content($page){
-    // not used
-    $item = array();
-
-    $path = "data/pages";
-		$file = 'data/pages/'.$page.'.xml';
-    $data = getXML($file);
-		
-		# echo"raw content <pre>" .$data->content . "</pre>";
-		
-		# $item['content'] = stripslashes(htmlspecialchars_decode($data->content, ENT_QUOTES));
-		# $item['content'] = 	stripslashes($data->content);
-		$item['content'] = strip_decode($data->content);
-		
-		# echo"item content<pre>" .$item['content'] . "</pre>";
-		
-		# global $content;
-		# echo"global content<pre>".$content."</pre>";
-		
-   	$item['title'] = $data->title;
-    $item['pubDate'] = $data->pubDate;
-    $item['url'] = $data->url;
-    $item['private'] = $data->private;
-    $item['parent'] = $data->parent;
-    $item['menuOrder'] = $data->menuOrder;
-    
-    return $item;
-}
-
 
 function unit_test_toc($count=10){
 	$str = "<i>" . $count . " Random Headers</i><br/><br/>";
