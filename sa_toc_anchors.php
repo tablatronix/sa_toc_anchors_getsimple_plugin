@@ -48,6 +48,7 @@ $allowargs = array(
 
 define('SA_TOC_TRIGGER', 'sa_toc');
 $sa_charsetstr = '<meta http-equiv="content-type" content="text/html; charset=utf-8">';
+$sa_class = 'sa_toc';
 
 # Functions
 
@@ -319,6 +320,8 @@ function get_toc_asc($headers,$list){
   // Ascenders Only Tree
   // Only ascending headers shown, descenders are ignored, efficient and clean menus
 
+  GLOBAL $sa_class;
+
   $tocstr = "";
   $startlvl = 1;
 	$lvl = 0;
@@ -339,7 +342,7 @@ function get_toc_asc($headers,$list){
 				// if($prevlvl == 0){ $tocstr.="<ol>"; }
 				
 				if($thislvl > $prevlvl){
-					$tocstr.= "\n<$list>\n";
+					$tocstr.= "\n<$list class=$sa_class>\n";
 					$lvl++;
 				}
 				else if($thislvl < $prevlvl){
